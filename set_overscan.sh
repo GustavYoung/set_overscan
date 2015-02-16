@@ -34,6 +34,40 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+CONFIG=/boot/config.txt
+
+#########################################################################
+# Function                                                              #
+#########################################################################
+function get_kc
+{
+    od -t o1 | awk '{ for (i=2; i<=NF; i++)
+                        printf("%s%s", i==2 ? "" : " ", $i)
+                        exit }'
+}
+
+set_config_var() {
+  lua - "$1" "$2" "$3" <<EOF > "$3.bak"
+local key=assert(arg[1])
+local value=assert(arg[2])
+local fn=assert(arg[3])
+local file=assert(io.open(fn))
+local made_change=false
+for line in file:lines() do
+  if line:match("^#?%s*"..key.."=.*$") then
+    line=key.."="..value
+    made_change=true
+  end
+  print(line)
+end
+
+if not made_change then
+  print(key.."="..value)
+end
+EOF
+mv "$3.bak" "$3"
+}
+
 #########################################################################
 # Check we are root or using sudo otherwise why bother?                 #
 #########################################################################
@@ -46,20 +80,11 @@ fi
 #########################################################################
 # Is overscan enabled? If not the fix it & reboot                       #
 #########################################################################
-if [ `vcgencmd get_config disable_overscan | awk -F '=' '{print $2}'` -eq "1" ]; then
-        whiptail --msgbox  "Overscan is currently disabled. Please add the line disable_overscan to the bottom of the config.txt file in the /boot directory, reboot & then rerun this script." 10 45
+if [ `vcgencmd get_config disable_overscan | awk -F '=' '{print $2}'` -eq "0" ]; then
+        set_config_var disable_overscan 1 $CONFIG
+        whiptail --msgbox  "Overscan is currently enabled. I've added disable_overscan=1 to config.txt, reboot & then rerun this script." 10 45
         exit 1
 fi
-
-#########################################################################
-# Function                                                              #
-#########################################################################
-function get_kc
-{
-    od -t o1 | awk '{ for (i=2; i<=NF; i++)
-                        printf("%s%s", i==2 ? "" : " ", $i)
-                        exit }'
-}
 
 #########################################################################
 # Variables & Constants & create some files                             #
@@ -82,8 +107,8 @@ fi
 
 # Check for mailbox & if not existing create it.
 created_mailbox=0
-if [ ! -c /dev/mailbox ]; then
-       mknod /dev/mailbox c 100 0
+if [ ! -c /dev/vcio ]; then
+       mknod /dev/vcio c 100 0
        create_mailbox=1
 fi
 
@@ -192,8 +217,12 @@ done
 cat cleared > /dev/fb0
 clear
 
-# Finished so write to /boot/config.txt
-echo -ne "# Overscan settings. Written by set_overscan.sh\ndisable_overscan\noverscan_top=$GPU_OVERSCAN_TOP\noverscan_bottom=$GPU_OVERSCAN_BOTTOM\noverscan_left=$GPU_OVERSCAN_LEFT\noverscan_right=$GPU_OVERSCAN_RIGHT\n" >> /boot/config.txt
+# Finished so update $CONFIG
+set_config_var disable_overscan 1 $CONFIG
+set_config_var overscan_top $GPU_OVERSCAN_TOP $CONFIG
+set_config_var overscan_bottom $GPU_OVERSCAN_BOTTOM $CONFIG
+set_config_var overscan_left $GPU_OVERSCAN_LEFT $CONFIG
+set_config_var overscan_right $GPU_OVERSCAN_RIGHT $CONFIG
 
 # Clean up 
 if [ $create_mailbox -eq 1 ]; then
