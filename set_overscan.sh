@@ -226,7 +226,7 @@ set_config_var overscan_right $GPU_OVERSCAN_RIGHT $CONFIG
 
 # Clean up 
 if [ $create_mailbox -eq 1 ]; then
-	rm -f /dev/mailbox
+	rm -f /dev/vcio
 fi
 rm rand
 rm cleared
